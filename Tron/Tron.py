@@ -18,6 +18,7 @@ min_usdt_balance_for_holder = 1000
 max_tx_count_for_holder = 20
 min_trx_balance_for_holder = 2000
 
+#Add date 
 
 tron = Tron(full_node=full_node, solidity_node=solidity_node, event_server=event_server)
 
