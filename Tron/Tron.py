@@ -54,37 +54,39 @@ def trx_finder(txids: list):
         tx = tron.trx.get_transaction(txid)
         from_addr = tx["raw_data"]["contract"][0]["parameter"]["value"]["owner_address"]
         from_addr = str(base58.b58encode_check(bytes.fromhex(str(from_addr))))[2:-1]
-
-        if is_hot_wallet(from_addr):
-
-            res = requests.get(
-                "https://apilist.tronscan.org/api/accountv2?address="
-                + from_addr
-                + "&source=true"
-            )
-            res = json.loads(res.text)
-            tx_count = res["totalTransactionCount"]
-            limit = 40
-
-            pages = limit_and_start(limit, tx_count)
-
-            last_line = 0
-            for page in pages:
-                url = (
-                    "https://apilist.tronscan.org/api/transaction?sort=-timestamp&count=true&limit="
-                    + str(limit)
-                    + "&start="
-                    + page
-                    + "&address="
-                    + from_addr
-                )
-                res = requests.get(url)
-                res = json.loads(res.text)
-                if res["total"] == 0:
-                    continue
-                last_line = tx_analysis(res["data"], from_addr, last_line)
-                time.sleep(0.25)
         
+        try:
+            if is_hot_wallet(from_addr):
+
+                res = requests.get(
+                    "https://apilist.tronscan.org/api/accountv2?address="
+                    + from_addr
+                    + "&source=true"
+                )
+                res = json.loads(res.text)
+                tx_count = res["totalTransactionCount"]
+                limit = 40
+
+                pages = limit_and_start(limit, tx_count)
+
+                last_line = 0
+                for page in pages:
+                    url = (
+                        "https://apilist.tronscan.org/api/transaction?sort=-timestamp&count=true&limit="
+                        + str(limit)
+                        + "&start="
+                        + page
+                        + "&address="
+                        + from_addr
+                    )
+                    res = requests.get(url)
+                    res = json.loads(res.text)
+                    if res["total"] == 0:
+                        continue
+                    last_line = tx_analysis(res["data"], from_addr, last_line)
+                    time.sleep(0.25)
+        except:
+            continue
     return final_result
 
 
@@ -97,51 +99,55 @@ def tx_analysis(results, from_addr: str, lastLine: int):
     # print result in console for abserve progress of running script should be done in this function
     line = lastLine
     for result in results:
-        if result["toAddress"] == from_addr:
-            print(line, "#1", "this is a recive transaction")
-            line = line + 1
-            continue
-        elif not (result["result"] == "SUCCESS"):
-            continue
-
-        to_addr = ""
-
-        if result["toAddress"] == USDT_addr:
-            # finde recive address with using of usdt contract event
-            USDT = tron.trx.contract(USDT_addr, abi=usdt_abi)
-            info = USDT.tron.get_event_transaction_id(result["hash"])[0]["result"]["to"]
-            to_addr = str(base58.b58encode_check(bytes.fromhex("41" + info[2:])))[2:-1]
-            check = is_holder(to_addr)
-            if check:
-                print(line, "#2", "good", "a usdt holder is finded", to_addr)
-                line = line + 1
-                if not (to_addr in final_result):
-                    final_result.append(to_addr)
-            else:
-                print(line, "#2.1", "not a usdt holder")
-            line = line + 1
-        else:
-            if not (result["contractType"] == 1) or result["amount"] == str(0):
-                print(
-                    line,
-                    "#3",
-                    "other token contract or trx value is zero",
-                    result["to"],
-                    result["value"],
-                )
+        try:
+            if result["toAddress"] == from_addr:
+                print(line, "#1", "this is a recive transaction")
                 line = line + 1
                 continue
+            elif not (result["result"] == "SUCCESS"):
+                continue
 
-            to_addr = result["toAddress"]
-            check = is_holder(to_addr)
+            to_addr = ""
 
-            if check:
-                print(line, "#4", "good", "a trx holder is finded")
+            if result["toAddress"] == USDT_addr:
+                # finde recive address with using of usdt contract event
+                USDT = tron.trx.contract(USDT_addr, abi=usdt_abi)
+                info = USDT.tron.get_event_transaction_id(result["hash"])[0]["result"]["to"]
+                to_addr = str(base58.b58encode_check(bytes.fromhex("41" + info[2:])))[2:-1]
+                check = is_holder(to_addr)
+                if check:
+                    print(line, "#2", "good", "a usdt holder is finded", to_addr)
+                    line = line + 1
+                    if not (to_addr in final_result):
+                        final_result.append(to_addr)
+                else:
+                    print(line, "#2.1", "not a usdt holder")
                 line = line + 1
-                final_result.append(to_addr)
             else:
-                print(line, "#4.1", "not a trx holder")
-            line = line + 1
+                if not (result["contractType"] == 1) or result["amount"] == str(0):
+                    print(
+                        line,
+                        "#3",
+                        "other token contract or trx value is zero",
+                        result["to"],
+                        result["value"],
+                    )
+                    line = line + 1
+                    continue
+
+                to_addr = result["toAddress"]
+                check = is_holder(to_addr)
+
+                if check:
+                    print(line, "#4", "good", "a trx holder is finded")
+                    line = line + 1
+                    final_result.append(to_addr)
+                else:
+                    print(line, "#4.1", "not a trx holder")
+                line = line + 1
+        except:
+            continue
+
 
     return line
 
@@ -151,6 +157,7 @@ def is_holder(addr: str):
     check = is_hot_wallet(addr)
     if check:
         return False
+
 
     res = requests.get(
         "https://apilist.tronscan.org/api/accountv2?address=" + addr + "&source=true"
